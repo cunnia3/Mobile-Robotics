@@ -11,13 +11,13 @@ import numpy as np
 ## MOTOR TEST
 start_state = np.zeros([2,1])
 start_state[1] = -10
-my_motor = Motor(start_state)
+my_motor = SimulatedMotor(start_state)
 
 time = 0
 sense_dt = .1 # time between measurements
-for i in range(100):
+for i in range(1000):
     time+=sense_dt
-    my_motor.measurement_update(my_motor.get_noisy_measurement(), time)
+    my_motor.update(time)
     
 plt.plot(my_motor.state_history)
 plt.plot(my_motor.control_history, 'r')
