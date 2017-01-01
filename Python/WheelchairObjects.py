@@ -39,12 +39,13 @@ class KalmanFilterLinear:
 class Motor:
     """ Base class for a motor object, is implemented to be a simulated motor
         Extend for real motor"""
-    def __init__(self, starting_state):
+    def __init__(self, starting_state, track_history = True):
+        self.track_history = track_history
         self.dt = .005
         self.k1 = -2           # motor constant
         self.k2 = 2            # motor constant
         self.state = starting_state
-        self.saturation = 5     # absolute saturation velocity
+        self.saturation = 20     # absolute saturation velocity
         self.Q = np.eye(2)*.001  # variance of process noise
         self.R = np.eye(2)      # variance of sensing noise
         
@@ -53,6 +54,7 @@ class Motor:
         
         self.desired_speed = 0
         self.state_history = []
+        self.control_history = []
         
         ## State space
         continuous_A = self.k1
@@ -66,7 +68,9 @@ class Motor:
         self.kf = KalmanFilterLinear(self.A, self.B, self.C, self.state, np.zeros([2,2]), self.Q, self.R)
         self.K = np.ones([1,2])
         self.K[0,0] = 0
-        self.K[0,1] = -5
+        self.K[0,1] = 3
+        
+        self.set_desired_speed(10)
         
     def measurement_update(self, measurement, time_now):
         """ Incorporate a measurement, find new control """
@@ -86,15 +90,28 @@ class Motor:
         mean = [0, 0]
         return self.state + np.random.multivariate_normal(mean, self.R).reshape([2,1])
         
+    def set_desired_speed(self, desired_speed):
+        """ Set desired speed for the motor, calculate steady state current 
+            with feed forward"""
+        self.set_point = desired_speed
+        self.feed_forward_u = -self.k1*desired_speed/self.k2
+        
     def _step_voltage(self, voltage):
         """ apply a voltage to the motor for specified time, simulated has to update true state """
         # UPDATE REAL STATE
         mean = [0, 0]
         self.state = np.dot(self.A, self.state) + np.dot(self.B, self.u) + np.random.multivariate_normal(mean, self.Q).reshape([2,1])
-        self.state_history.append(self.state[1])
+        if self.track_history:
+            self.state_history.append(self.state[1])
+            self.control_history.append(voltage)
 
         # UPDATE KALMAN FILTER
         self.kf.step(voltage)
             
     def _update_control(self):
-        self.u = np.dot(self.K, self.state)
+        self.u = np.dot(self.K, self.set_point-self.state) + self.feed_forward_u
+        if self.u > self.saturation:
+            self.u = self.saturation
+            
+        if self.u < -self.saturation:
+            self.u = -self.saturation
