@@ -41,10 +41,10 @@ class Motor:
         Extend for real motor"""
     def __init__(self, starting_state, track_history = True):
         self.track_history = track_history
-        self.dt = .005
+        self.dt = .01
 
-        self.k1 = -2           # motor constant
-        self.k2 = 2            # motor constant
+        self.k1 = -1        # motor constant
+        self.k2 = 1            # motor constant
         
         self.saturation = 40     # absolute saturation velocity
         
@@ -67,7 +67,7 @@ class Motor:
         # Control gains
         self.K = np.ones([1,2])
         self.K[0,0] = 0
-        self.K[0,1] = 3
+        self.K[0,1] = 1
         
         self.set_desired_speed(0)
         
@@ -75,7 +75,7 @@ class Motor:
         """ Set desired speed for the motor, calculate steady state current 
             with feed forward"""
         self.set_point = desired_speed
-        self.feed_forward_u = -self.k1*desired_speed/self.k2        
+        self.feed_forward_u = 0#-self.k1*desired_speed/self.k2        
     
     def update(self, time_now):
         """ Update state estimate and control
@@ -83,7 +83,8 @@ class Motor:
             2) OPTIONALLY incorporate measurement
             2) Update control """
   
-        self.dt = -(self.t_last_m - time_now)               
+        self.dt = -(self.t_last_m - time_now)      
+        self.t_last_m = time_now         
         
         ### UPDATE KFILTER PARAMS ###
         self.A = math.exp(self.k1 * self.dt)
@@ -123,13 +124,13 @@ class Motor:
 class SimulatedMotor(Motor):
     def __init__(self, starting_state, track_history = True):
         self.track_history = track_history
-        self.dt = .005
-        self.k1 = -2           # motor constant
+        self.dt = .1
+        self.k1 = -1          # motor constant
         self.k2 = 2            # motor constant
         self.state = starting_state
         self.saturation = 40     # absolute saturation velocity
-        self.Q = np.eye(2)*.1  # variance of process noise
-        self.R = np.eye(2)      # variance of sensing noise
+        self.Q = .1  # variance of process noise
+        self.R = np.eye(2)   # variance of sensing noise
         
         self.t_last_m = 0
         self.u = 0
@@ -141,27 +142,29 @@ class SimulatedMotor(Motor):
         # Discrete state space
         self.A = math.exp(self.k1 * self.dt)
         self.B = (1.0/self.k1)*(self.A - 1)*self.k2
-        self.C = np.eye(2)
+        self.C = np.ones([2,1])
         
-        self.kf = KalmanFilterLinear(self.A, self.B, self.C, self.state, np.zeros([2,2]), self.Q, self.R)
-        self.K = np.ones([1,2])
-        self.K[0,0] = 0
-        self.K[0,1] = .5
+        self.kf = KalmanFilterLinear(self.A, self.B, self.C, self.state, np.zeros([1,1]), self.Q, self.R)
+        self.K = np.ones([1,1])
+        self.K = 1
         
         self.set_desired_speed(10)        
+        self.num_sim_measurements = 0        
+        
         
     def _obtain_measurement(self):
         """ WILL NOT BE PRESENT IN NON-SIMULATED"""
-        mean = [0, 0]
+        # keep track of measurements provided so far
+        self.num_sim_measurements += 1
         self._step_simulated_system() 
-        return self.state + np.random.multivariate_normal(mean, self.R).reshape([2,1])
+        
+        return np.array([[self.state + np.random.normal(0, self.R[0,0])],[self.state + np.random.normal(0, self.R[1,1])]])
         
         
     def _step_simulated_system(self):
         """ apply a voltage to the motor for specified time, simulated has to update true state """
         # UPDATE REAL STATE
-        mean = [0, 0]
-        self.state = np.dot(self.A, self.state) + np.dot(self.B, self.u) + np.random.multivariate_normal(mean, self.Q).reshape([2,1])
+        self.state = np.dot(self.A, self.state) + np.dot(self.B, self.u) + np.random.normal(0, self.Q)
         if self.track_history:
-            self.state_history.append(self.state[1])
+            self.state_history.append(self.state)
             self.control_history.append(self.u)
