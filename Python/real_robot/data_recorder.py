@@ -38,6 +38,8 @@ class DataRecorder:
     Records data from IMU's
     """
     def __init__(self):
+        rospy.init_node('recorder',anonymous=True)
+
         # Roboclaw
         self.myRoboclaw = RoboClaw()
         
@@ -56,13 +58,13 @@ class DataRecorder:
         if self.test_in_progress:
             time_now = time.time() - self.start_time
             current_m1v = data.angular_velocity.z
-            self.m1v_history.append( (time_now, current_m1v) )
+            self.m1v_history.append( (str(time_now), str(current_m1v)) )
         
     def _imu2Callback(self,data):
         if self.test_in_progress:
             time_now = time.time() - self.start_time
             current_m2v = data.angular_velocity.z
-            self.m2v_history.append( (time_now, current_m2v) )
+            self.m2v_history.append( (str(time_now), str(current_m2v)) )
             
     def record_results(self, file_name):
         f = open(file_name + '_m1', 'w')
@@ -90,11 +92,13 @@ class DataRecorder:
             
             ## RUN TEST
             self.myRoboclaw.writeM1M2(int(pwm), int(pwm))
+            self.test_in_progress = True
             while time.time() - self.start_time < int(time_to_run):
                 time.sleep(.05)
                 
             ## STOP TEST
             print "Done running!"
+            self.test_in_progress = False
             self.myRoboclaw.writeM1M2(0, 0)
             
             ## WRITE TEST RESULTS
@@ -104,3 +108,7 @@ class DataRecorder:
             ## REFRESH MEMORY
             self.m1v_history = []
             self.m2v_history = []
+
+my_recorder = DataRecorder()
+my_recorder.loop()
+    
